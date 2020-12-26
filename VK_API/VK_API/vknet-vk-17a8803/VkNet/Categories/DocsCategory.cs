@@ -1,0 +1,211 @@
+﻿using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using JetBrains.Annotations;
+using Newtonsoft.Json.Linq;
+using VkNet.Abstractions;
+using VkNet.Enums;
+using VkNet.Enums.SafetyEnums;
+using VkNet.Model;
+using VkNet.Model.Attachments;
+using VkNet.Utils;
+
+namespace VkNet.Categories
+{
+	/// <summary>
+	/// Методы для работы с документами (получение списка, загрузка, удаление и т.д.)
+	/// </summary>
+	public partial class DocsCategory : IDocsCategory
+	{
+		/// <summary>
+		/// API
+		/// </summary>
+		private readonly IVkApiInvoke _vk;
+
+		/// <summary>
+		/// Методы для работы с документами (получение списка, загрузка, удаление и т.д.).
+		/// </summary>
+		/// <param name="vk"> API. </param>
+		public DocsCategory(IVkApiInvoke vk)
+		{
+			_vk = vk;
+		}
+
+		/// <inheritdoc />
+		[Pure]
+		public VkCollection<Document> Get(int? count = null, int? offset = null, long? ownerId = null, DocFilter? type = null)
+		{
+			VkErrors.ThrowIfNumberIsNegative(expr: () => count);
+			VkErrors.ThrowIfNumberIsNegative(expr: () => offset);
+
+			var parameters = new VkParameters
+			{
+					{ "count", count }
+					, { "offset", offset }
+					, { "owner_id", ownerId }
+					, { "type", type }
+			};
+
+			return _vk.Call(methodName: "docs.get", parameters: parameters).ToVkCollectionOf<Document>(selector: r => r);
+		}
+
+		/// <inheritdoc />
+		[Pure]
+		public ReadOnlyCollection<Document> GetById(IEnumerable<Document> docs)
+		{
+			foreach (var doc in docs)
+			{
+				VkErrors.ThrowIfNumberIsNegative(expr: () => doc.Id);
+				VkErrors.ThrowIfNumberIsNegative(expr: () => doc.OwnerId);
+			}
+
+			var parameters = new VkParameters
+			{
+					{ "docs", string.Concat(values: docs.Select(selector: it => it.OwnerId + "_" + it.Id + ",")) }
+			};
+
+			var response = _vk.Call(methodName: "docs.getById", parameters: parameters);
+
+			return response.ToReadOnlyCollectionOf<Document>(selector: r => r);
+		}
+
+		/// <inheritdoc />
+		[Pure]
+		public UploadServerInfo GetUploadServer(long? groupId = null)
+		{
+			VkErrors.ThrowIfNumberIsNegative(expr: () => groupId);
+
+			var parameters = new VkParameters
+			{
+					{ "group_id", groupId }
+			};
+
+			return _vk.Call(methodName: "docs.getUploadServer", parameters: parameters);
+		}
+
+		/// <inheritdoc />
+		[Pure]
+		public UploadServerInfo GetWallUploadServer(long? groupId = null)
+		{
+			VkErrors.ThrowIfNumberIsNegative(expr: () => groupId);
+
+			var parameters = new VkParameters { { "group_id", groupId } };
+
+			return _vk.Call(methodName: "docs.getWallUploadServer", parameters: parameters);
+		}
+
+		/// <inheritdoc />
+		[Pure]
+		public ReadOnlyCollection<Document> Save(string file
+												, string title
+												, string tags = null
+												, long? captchaSid = null
+												, string captchaKey = null)
+		{
+			var file1 = file;
+			VkErrors.ThrowIfNullOrEmpty(expr: () => file1);
+			VkErrors.ThrowIfNullOrEmpty(expr: () => title);
+			var responseJson = JObject.Parse(json: file);
+			file = responseJson[propertyName: "file"].ToString();
+
+			var parameters = new VkParameters
+			{
+					{ "file", file }
+					, { "title", title }
+					, { "tags", tags }
+					, { "captcha_sid", captchaSid }
+					, { "captcha_key", captchaKey }
+			};
+
+			var response = _vk.Call(methodName: "docs.save", parameters: parameters);
+
+			return response.ToReadOnlyCollectionOf<Document>(selector: r => r);
+		}
+
+		/// <inheritdoc />
+		[Pure]
+		public bool Delete(long ownerId, long docId)
+		{
+			VkErrors.ThrowIfNumberIsNegative(expr: () => ownerId);
+			VkErrors.ThrowIfNumberIsNegative(expr: () => docId);
+
+			var parameters = new VkParameters
+			{
+					{ "owner_id", ownerId }
+					, { "doc_id", docId }
+			};
+
+			return _vk.Call(methodName: "docs.delete", parameters: parameters);
+		}
+
+		/// <inheritdoc />
+		[Pure]
+		public long Add(long ownerId, long docId, string accessKey = null, long? captchaSid = null, string captchaKey = null)
+		{
+			VkErrors.ThrowIfNumberIsNegative(expr: () => ownerId);
+			VkErrors.ThrowIfNumberIsNegative(expr: () => docId);
+
+			var parameters = new VkParameters
+			{
+					{ "owner_id", ownerId }
+					, { "doc_id", docId }
+					, { "access_key", accessKey }
+					, { "captcha_sid", captchaSid }
+					, { "captcha_key", captchaKey }
+			};
+
+			return _vk.Call(methodName: "docs.add", parameters: parameters);
+		}
+
+		/// <inheritdoc />
+		public VkCollection<DocumentType> GetTypes(long ownerId)
+		{
+			var parameters = new VkParameters
+			{
+					{ "owner_id", ownerId }
+			};
+
+			return _vk.Call(methodName: "docs.getTypes", parameters: parameters).ToVkCollectionOf<DocumentType>(selector: x => x);
+		}
+
+		/// <inheritdoc />
+		public VkCollection<Document> Search(string query, bool searchOwn, long? count = null, long? offset = null)
+		{
+			var parameters = new VkParameters
+			{
+					{ "q", query }
+					, { "count", count }
+					, { "offset", offset }
+					, { "search_own", searchOwn }
+			};
+
+			return _vk.Call(methodName: "docs.search", parameters: parameters).ToVkCollectionOf<Document>(selector: x => x);
+		}
+
+		/// <inheritdoc />
+		public bool Edit(long ownerId, long docId, string title, IEnumerable<string> tags)
+		{
+			var parameters = new VkParameters
+			{
+					{ "owner_id", ownerId }
+					, { "doc_id", docId }
+					, { "title", title }
+					, { "tags", tags }
+			};
+
+			return _vk.Call(methodName: "docs.edit", parameters: parameters);
+		}
+
+		/// <inheritdoc />
+		public UploadServerInfo GetMessagesUploadServer(long? peerId = null, DocMessageType type = null)
+		{
+			var parameters = new VkParameters
+			{
+					{ "peer_id", peerId }
+					, { "type", type }
+			};
+
+			return _vk.Call(methodName: "docs.getMessagesUploadServer", parameters: parameters);
+		}
+	}
+}
